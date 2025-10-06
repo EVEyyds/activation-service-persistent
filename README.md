@@ -69,16 +69,24 @@ activation-service-persistent/
 ├── src/
 │   ├── app.js                  # 应用入口
 │   └── database/
-│       └── init.sql           # 数据库初始化脚本
+│       ├── init.sql           # 数据库初始化脚本
+│       └── manager.js         # 数据库管理工具
 ├── data/
 │   └── activation.db          # SQLite数据库文件（自动创建）
 ├── docs/
 │   ├── api-documentation.md   # 详细API接口文档
 │   ├── development-guide.md   # 开发指南
 │   └── technical-design.md    # 技术设计文档
-├── .env.example               # 环境变量模板
-├── package.json               # 项目配置
-└── README.md                  # 项目说明
+├── examples/
+│   └── chrome-extension-client.js  # Chrome插件集成示例
+├── manage.js                  # 数据库管理工具（命令行）
+├── ecosystem.config.js        # PM2配置文件
+├── SERVER_SETUP.md           # 服务器部署指南
+├── DATABASE_GUIDE.md         # 数据库管理指南
+├── QUICK_START.md            # 快速启动指南
+├── .env.example              # 环境变量模板
+├── package.json              # 项目配置
+└── README.md                 # 项目说明
 ```
 
 ## 默认激活码
@@ -124,6 +132,73 @@ activation-service-persistent/
 ```
 
 详细的接口文档请参考: [API接口文档](docs/api-documentation.md)
+
+## 🗄️ 激活码管理
+
+### 命令行管理工具（推荐）
+
+本项目提供了交互式的数据库管理工具，方便管理激活码：
+
+```bash
+# 启动管理工具
+node manage.js
+```
+
+#### 主要功能
+- ✅ **添加激活码**：自定义激活码、产品标识、验证间隔
+- ✅ **删除激活码**：安全删除带确认提示
+- ✅ **修改激活码**：更新状态、验证间隔、备注信息
+- ✅ **查询激活码**：查看所有激活码或条件搜索
+- ✅ **统计信息**：查看激活码使用统计
+- ✅ **日志管理**：查看验证记录和清理过期日志
+
+#### 使用示例
+```
+🔧 激活码数据库管理工具
+=====================================
+
+请选择操作：
+1. 添加激活码
+2. 删除激活码
+3. 修改激活码
+4. 查看所有激活码
+5. 搜索激活码
+6. 查看统计信息
+7. 查看验证日志
+8. 清理过期日志
+9. 退出
+
+请输入选项 (1-9): 1
+
+📝 添加激活码
+激活码: PREMIUM_002
+产品标识: doubao_plugin
+验证间隔(小时，默认24): 168
+备注: 周验证高级激活码
+
+✅ 激活码 PREMIUM_002 添加成功
+```
+
+### 直接SQLite管理
+
+如果你熟悉SQL，也可以直接操作数据库：
+
+```bash
+# 连接数据库
+sqlite3 data/activation.db
+
+# 查看所有激活码
+SELECT * FROM activation_codes;
+
+# 添加新激活码
+INSERT INTO activation_codes (code, product_key, verify_interval_hours, notes)
+VALUES ('NEW_CODE', 'your_product', 24, '新激活码');
+
+# 退出
+.quit
+```
+
+详细的数据库管理指南请参考: [数据库管理指南](DATABASE_GUIDE.md)
 
 ## Chrome插件集成示例
 
@@ -205,12 +280,42 @@ npm start
 ```
 
 ### 生产环境部署
+
+详细的服务器部署指南请参考: [服务器部署指南](SERVER_SETUP.md)
+
+**快速部署**：
 ```bash
-# 使用PM2进程管理
+# 1. 安装PM2
 npm install -g pm2
-pm2 start src/app.js --name activation-service
+
+# 2. 使用配置文件启动
+pm2 start ecosystem.config.js --env production
+
+# 3. 设置开机自启
 pm2 startup
 pm2 save
+```
+
+**完整部署**（推荐）：
+```bash
+# 1. 克隆项目到服务器
+git clone https://github.com/EVEyyds/activation-service-persistent.git
+cd activation-service-persistent
+
+# 2. 安装生产依赖
+npm install --production
+
+# 3. 配置环境变量
+cp .env.production .env
+
+# 4. 初始化数据库
+npm run init-db
+
+# 5. 使用管理工具添加激活码
+node manage.js
+
+# 6. 启动服务
+pm2 start ecosystem.config.js --env production
 ```
 
 ## 监控和维护
@@ -253,12 +358,39 @@ A: 响应中的`next_verify_at`字段告诉前端下次应该验证的时间。
 ### Q4: 验证失败怎么办？
 A: 只有当激活码不存在或被禁用时才会验证失败，此时需要用户提供新的激活码。
 
-## 开发指南
+## 📚 相关文档
 
-详细的开发指南请参考: [开发指南](docs/development-guide.md)
+- [API接口文档](docs/api-documentation.md) - 详细的接口说明和示例
+- [开发指南](docs/development-guide.md) - 本地开发和测试指南
+- [技术设计文档](docs/technical-design.md) - 架构设计和技术细节
+- [服务器部署指南](SERVER_SETUP.md) - 完整的生产环境部署说明
+- [数据库管理指南](DATABASE_GUIDE.md) - 激活码管理工具使用指南
+- [快速启动指南](QUICK_START.md) - 快速上手和测试
 
-技术设计文档请参考: [技术设计文档](docs/technical-design.md)
+## 🔄 更新日志
+
+### v1.1.0 (当前版本)
+- ✅ 新增交互式数据库管理工具 `manage.js`
+- ✅ 新增服务器部署指南 `SERVER_SETUP.md`
+- ✅ 新增数据库管理指南 `DATABASE_GUIDE.md`
+- ✅ 新增快速启动指南 `QUICK_START.md`
+- ✅ 新增PM2配置文件 `ecosystem.config.js`
+- ✅ 优化项目结构和文档
+- ✅ 新增Chrome插件集成示例
+
+### v1.0.0
+- ✅ 基础激活验证功能
+- ✅ SQLite数据库支持
+- ✅ 持久有效激活码设计
+- ✅ Express.js + 安全中间件
+- ✅ 完整的API接口
 
 ## 许可证
 
 MIT License
+
+---
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request来改进这个项目！
