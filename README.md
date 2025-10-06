@@ -1,0 +1,396 @@
+# 持久有效激活验证服务
+
+## 项目概述
+
+这是一个专为Chrome插件等客户端应用设计的激活验证服务。采用**持久有效激活码**的设计理念，激活码永远不会真正失效，只是控制前端多久验证一次。
+
+## 核心特性
+
+- ✅ **持久有效激活码**：激活码永不过期，后端始终返回成功
+- ✅ **灵活验证间隔**：不同激活码可设置不同的验证周期（1小时/24小时/72小时等）
+- ✅ **轻量级架构**：SQLite数据库，零配置启动
+- ✅ **完整系统架构**：Express.js + SQLite + 安全中间件
+- ✅ **前端控制逻辑**：根据返回的`next_verify_at`控制验证时机
+- ✅ **简单易用**：一个核心接口搞定所有验证需求
+
+## 设计理念
+
+### 传统方案 vs 本方案
+
+| 方面 | 传统方案 | 本方案 |
+|------|----------|--------|
+| 激活码失效 | 后端拒绝验证 | 永远通过验证 |
+| 过期控制 | 后端强制过期 | 前端自主控制 |
+| 验证逻辑 | 复杂的过期计算 | 简单的时间判断 |
+| 用户体验 | 过期需重新输入 | 自动续期验证 |
+
+### 核心逻辑
+
+1. **后端验证**：只要激活码存在且状态为active，就返回成功
+2. **时间控制**：返回`next_verify_at`告诉前端下次验证时间
+3. **前端控制**：前端根据当前时间和`next_verify_at`决定是否重新验证
+4. **自动续期**：验证间隔到期后自动重新验证，无需用户干预
+
+## 技术栈
+
+- **运行时**: Node.js 14+
+- **Web框架**: Express.js 4.x
+- **数据库**: SQLite3
+- **安全**: Helmet, CORS, Rate Limit
+- **日志**: Morgan
+
+## 快速开始
+
+### 1. 环境要求
+- Node.js 14.0+
+- npm 6.0+
+
+### 2. 安装依赖
+```bash
+npm install
+```
+
+### 3. 启动服务
+```bash
+# 开发模式
+npm run dev
+
+# 生产模式
+npm start
+```
+
+### 4. 验证安装
+访问 http://localhost:3000/health 查看服务状态
+
+## 项目结构
+
+```
+activation-service-persistent/
+├── src/
+│   ├── app.js                  # 应用入口
+│   └── database/
+│       ├── init.sql           # 数据库初始化脚本
+│       └── manager.js         # 数据库管理工具
+├── data/
+│   └── activation.db          # SQLite数据库文件（自动创建）
+├── docs/
+│   ├── api-documentation.md   # 详细API接口文档
+│   ├── development-guide.md   # 开发指南
+│   └── technical-design.md    # 技术设计文档
+├── examples/
+│   └── chrome-extension-client.js  # Chrome插件集成示例
+├── manage.js                  # 数据库管理工具（命令行）
+├── ecosystem.config.js        # PM2配置文件
+├── SERVER_SETUP.md           # 服务器部署指南
+├── DATABASE_GUIDE.md         # 数据库管理指南
+├── QUICK_START.md            # 快速启动指南
+├── .env.example              # 环境变量模板
+├── package.json              # 项目配置
+└── README.md                 # 项目说明
+```
+
+## 默认激活码
+
+服务启动时会自动创建以下激活码：
+
+| 激活码 | 产品 | 验证间隔 | 说明 |
+|--------|------|----------|------|
+| DEMO_001 | doubao_plugin | 24小时 | 演示激活码 |
+| DEMO_002 | doubao_plugin | 24小时 | 演示激活码 |
+| PREMIUM_001 | doubao_plugin | 72小时 | 高级激活码 |
+| TEST_001 | test_product | 1小时 | 测试激活码 |
+
+## 核心接口
+
+### 激活验证接口
+
+**接口**: `POST /api/verify`
+
+**功能**: 验证激活码，返回下次验证时间
+
+**请求示例**:
+```json
+{
+  "code": "DEMO_001",
+  "product_key": "doubao_plugin",
+  "device_id": "chrome_device_123"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "status": "active",
+    "next_verify_at": "2024-01-02T12:00:00.000Z",
+    "verify_interval_hours": 24,
+    "activated_at": "2024-01-01T12:00:00.000Z"
+  },
+  "message": "验证成功"
+}
+```
+
+详细的接口文档请参考: [API接口文档](docs/api-documentation.md)
+
+## 🗄️ 激活码管理
+
+### 命令行管理工具（推荐）
+
+本项目提供了交互式的数据库管理工具，方便管理激活码：
+
+```bash
+# 启动管理工具
+node manage.js
+```
+
+#### 主要功能
+- ✅ **添加激活码**：自定义激活码、产品标识、验证间隔
+- ✅ **删除激活码**：安全删除带确认提示
+- ✅ **修改激活码**：更新状态、验证间隔、备注信息
+- ✅ **查询激活码**：查看所有激活码或条件搜索
+- ✅ **统计信息**：查看激活码使用统计
+- ✅ **日志管理**：查看验证记录和清理过期日志
+
+#### 使用示例
+```
+🔧 激活码数据库管理工具
+=====================================
+
+请选择操作：
+1. 添加激活码
+2. 删除激活码
+3. 修改激活码
+4. 查看所有激活码
+5. 搜索激活码
+6. 查看统计信息
+7. 查看验证日志
+8. 清理过期日志
+9. 退出
+
+请输入选项 (1-9): 1
+
+📝 添加激活码
+激活码: PREMIUM_002
+产品标识: doubao_plugin
+验证间隔(小时，默认24): 168
+备注: 周验证高级激活码
+
+✅ 激活码 PREMIUM_002 添加成功
+```
+
+### 直接SQLite管理
+
+如果你熟悉SQL，也可以直接操作数据库：
+
+```bash
+# 连接数据库
+sqlite3 data/activation.db
+
+# 查看所有激活码
+SELECT * FROM activation_codes;
+
+# 添加新激活码
+INSERT INTO activation_codes (code, product_key, verify_interval_hours, notes)
+VALUES ('NEW_CODE', 'your_product', 24, '新激活码');
+
+# 退出
+.quit
+```
+
+详细的数据库管理指南请参考: [数据库管理指南](DATABASE_GUIDE.md)
+
+## Chrome插件集成示例
+
+### 前端验证逻辑
+```javascript
+class ActivationClient {
+  constructor(baseUrl = 'http://localhost:3000') {
+    this.baseUrl = baseUrl;
+  }
+
+  async verify(code, productKey, deviceId = null) {
+    const response = await fetch(`${this.baseUrl}/api/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        product_key: productKey,
+        device_id: deviceId
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // 保存下次验证时间
+      chrome.storage.local.set({
+        activated: true,
+        nextVerifyAt: result.data.next_verify_at,
+        lastVerify: new Date().toISOString()
+      });
+    }
+
+    return result;
+  }
+
+  async checkStatus() {
+    const data = await chrome.storage.local.get(['activated', 'nextVerifyAt']);
+
+    if (!data.activated) return { activated: false };
+
+    const now = new Date();
+    const nextVerifyTime = new Date(data.nextVerifyAt);
+
+    return {
+      activated: true,
+      needVerify: now >= nextVerifyTime,
+      remainingHours: Math.max(0, Math.floor((nextVerifyTime - now) / (1000 * 60 * 60)))
+    };
+  }
+}
+
+// 自动验证管理
+async function autoVerify() {
+  const status = await activationClient.checkStatus();
+
+  if (status.needVerify) {
+    // 重新验证
+    const { savedCode } = await chrome.storage.local.get(['savedCode']);
+    await activationClient.verify(savedCode, 'doubao_plugin');
+  }
+}
+
+// 定期检查
+setInterval(autoVerify, 60 * 60 * 1000); // 每小时检查一次
+```
+
+## 部署说明
+
+### 本地部署
+```bash
+# 1. 安装依赖
+npm install
+
+# 2. 配置环境变量（可选）
+cp .env.example .env
+
+# 3. 启动服务
+npm start
+```
+
+### 生产环境部署
+
+详细的服务器部署指南请参考: [服务器部署指南](SERVER_SETUP.md)
+
+**快速部署**：
+```bash
+# 1. 安装PM2
+npm install -g pm2
+
+# 2. 使用配置文件启动
+pm2 start ecosystem.config.js --env production
+
+# 3. 设置开机自启
+pm2 startup
+pm2 save
+```
+
+**完整部署**（推荐）：
+```bash
+# 1. 克隆项目到服务器
+git clone https://github.com/EVEyyds/activation-service-persistent.git
+cd activation-service-persistent
+
+# 2. 安装生产依赖
+npm install --production
+
+# 3. 配置环境变量
+cp .env.production .env
+
+# 4. 初始化数据库
+npm run init-db
+
+# 5. 使用管理工具添加激活码
+node manage.js
+
+# 6. 启动服务
+pm2 start ecosystem.config.js --env production
+```
+
+## 监控和维护
+
+### 健康检查
+```bash
+# 基础健康检查
+curl http://localhost:3000/health
+
+# 查看服务统计
+curl http://localhost:3000/api/stats
+```
+
+### 日志查看
+```bash
+# PM2日志
+pm2 logs activation-service
+
+# 或者直接查看控制台输出
+```
+
+## 安全考虑
+
+1. **速率限制**: 每个IP每分钟最多30次请求
+2. **输入验证**: 严格的参数验证
+3. **安全头部**: 使用Helmet中间件
+4. **CORS配置**: 仅允许Chrome插件访问
+
+## 常见问题
+
+### Q1: 激活码会过期吗？
+A: 不会。激活码是持久有效的，只要状态为active就永远返回验证成功。
+
+### Q2: 如何控制验证频率？
+A: 通过`verify_interval_hours`字段控制，不同激活码可以设置不同的验证间隔。
+
+### Q3: 前端如何知道何时重新验证？
+A: 响应中的`next_verify_at`字段告诉前端下次应该验证的时间。
+
+### Q4: 验证失败怎么办？
+A: 只有当激活码不存在或被禁用时才会验证失败，此时需要用户提供新的激活码。
+
+## 📚 相关文档
+
+- [API接口文档](docs/api-documentation.md) - 详细的接口说明和示例
+- [开发指南](docs/development-guide.md) - 本地开发和测试指南
+- [技术设计文档](docs/technical-design.md) - 架构设计和技术细节
+- [服务器部署指南](SERVER_SETUP.md) - 完整的生产环境部署说明
+- [数据库管理指南](DATABASE_GUIDE.md) - 激活码管理工具使用指南
+- [快速启动指南](QUICK_START.md) - 快速上手和测试
+
+## 🔄 更新日志
+
+### v1.1.0 (当前版本)
+- ✅ 新增交互式数据库管理工具 `manage.js`
+- ✅ 新增服务器部署指南 `SERVER_SETUP.md`
+- ✅ 新增数据库管理指南 `DATABASE_GUIDE.md`
+- ✅ 新增快速启动指南 `QUICK_START.md`
+- ✅ 新增PM2配置文件 `ecosystem.config.js`
+- ✅ 优化项目结构和文档
+- ✅ 新增Chrome插件集成示例
+
+### v1.0.0
+- ✅ 基础激活验证功能
+- ✅ SQLite数据库支持
+- ✅ 持久有效激活码设计
+- ✅ Express.js + 安全中间件
+- ✅ 完整的API接口
+
+## 许可证
+
+MIT License
+
+---
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request来改进这个项目！
