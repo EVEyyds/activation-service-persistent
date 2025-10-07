@@ -24,8 +24,15 @@ function addVerificationLog(code, device_id, result) {
 }
 
 function handler(req, res) {
+  // 解析URL路径
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const path = url.pathname;
+
+  // 设置响应头
+  res.setHeader('Content-Type', 'application/json');
+
   // 处理健康检查
-  if (req.method === 'GET' && req.url === '/health') {
+  if (req.method === 'GET' && path === '/health') {
     return res.status(200).json({
       status: 'ok',
       service: 'activation-service-simple',
@@ -36,71 +43,70 @@ function handler(req, res) {
   }
 
   // 处理验证接口
-  if (req.method === 'POST' && req.url === '/api/verify') {
-    return new Promise((resolve) => {
-      let body = '';
-      req.on('data', chunk => {
-        body += chunk.toString();
-      });
-      req.on('end', () => {
-        try {
-          const { code, product_key, device_id } = JSON.parse(body);
+  if (req.method === 'POST' && path === '/api/verify') {
+    let body = '';
 
-          if (!code || !product_key) {
-            res.status(400).json({
-              success: false,
-              message: '激活码和产品标识不能为空'
-            });
-            return resolve();
-          }
-
-          const activation = memoryDatabase.activationCodes.find(
-            item => item.code === code && item.product_key === product_key && item.status === 'active'
-          );
-
-          if (!activation) {
-            addVerificationLog(code, device_id, 'failed');
-            res.status(200).json({
-              success: false,
-              message: '激活码不存在或产品不匹配',
-              timestamp: new Date().toISOString()
-            });
-            return resolve();
-          }
-
-          const now = new Date();
-          const nextVerifyTime = new Date(
-            now.getTime() + activation.verify_interval_hours * 60 * 60 * 1000
-          );
-
-          addVerificationLog(code, device_id, 'success');
-
-          res.status(200).json({
-            success: true,
-            data: {
-              status: 'active',
-              next_verify_at: nextVerifyTime.toISOString(),
-              verify_interval_hours: activation.verify_interval_hours,
-              activated_at: now.toISOString()
-            },
-            message: '验证成功',
-            timestamp: new Date().toISOString()
-          });
-          resolve();
-        } catch (error) {
-          res.status(500).json({
-            success: false,
-            message: '服务器内部错误',
-            timestamp: new Date().toISOString()
-          });
-          resolve();
-        }
-      });
+    req.on('data', chunk => {
+      body += chunk.toString();
     });
+
+    req.on('end', () => {
+      try {
+        const { code, product_key, device_id } = JSON.parse(body || '{}');
+
+        if (!code || !product_key) {
+          return res.status(400).json({
+            success: false,
+            message: '激活码和产品标识不能为空',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        const activation = memoryDatabase.activationCodes.find(
+          item => item.code === code && item.product_key === product_key && item.status === 'active'
+        );
+
+        if (!activation) {
+          addVerificationLog(code, device_id, 'failed');
+          return res.status(200).json({
+            success: false,
+            message: '激活码不存在或产品不匹配',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        const now = new Date();
+        const nextVerifyTime = new Date(
+          now.getTime() + activation.verify_interval_hours * 60 * 60 * 1000
+        );
+
+        addVerificationLog(code, device_id, 'success');
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            status: 'active',
+            next_verify_at: nextVerifyTime.toISOString(),
+            verify_interval_hours: activation.verify_interval_hours,
+            activated_at: now.toISOString()
+          },
+          message: '验证成功',
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: '服务器内部错误',
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    return;
   }
 
   // 处理统计接口
-  if (req.method === 'GET' && req.url === '/api/stats') {
+  if (req.method === 'GET' && path === '/api/stats') {
     const today = new Date().toISOString().split('T')[0];
     const todayLogs = memoryDatabase.verificationLogs.filter(
       log => log.timestamp.startsWith(today)
@@ -124,7 +130,7 @@ function handler(req, res) {
   }
 
   // 404处理
-  res.status(404).json({
+  return res.status(404).json({
     success: false,
     message: '接口不存在',
     timestamp: new Date().toISOString()
